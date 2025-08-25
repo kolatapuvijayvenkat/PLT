@@ -27,13 +27,13 @@ function App() {
 
   return (
     <div>
-      <h1>Send Data to Backend and Print the Message</h1>
+      <h1>Send Data to Backend</h1>
       <input
         type="text"
         value={input}
         onChange={handleInputChange}
         placeholder="Enter something"
-      />
+      /><br/>
       <button onClick={sendData}>Send</button>
       {responseMessage && <p>{responseMessage}</p>}
     </div>
