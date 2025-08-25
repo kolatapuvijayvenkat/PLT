@@ -27,7 +27,7 @@ function App() {
 
   return (
     <div>
-      <h1>Send Data to Backend</h1>
+      <h1>Send Data to Backend and Print the Message</h1>
       <input
         type="text"
         value={input}
