@@ -27,13 +27,7 @@ function App() {
 
   return (
     <div>
-      <h1>Send Data to Backend</h1>
-      <p>Hi
-      Jeevesh
-      Vijay
-      Saiteja
-      Aswini
-      Operations Pipeline Test</p>
+      <h1>Send Data to Backend and Print</h1>
       <input
         type="text"
         value={input}
