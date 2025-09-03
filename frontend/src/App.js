@@ -33,7 +33,7 @@ function App() {
         value={input}
         onChange={handleInputChange}
         placeholder="Enter something"
-      />
+      /><br/>
       <button onClick={sendData}>Send</button>
       {responseMessage && <p>{responseMessage}</p>}
     </div>
