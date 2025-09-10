@@ -47,7 +47,7 @@ jobs:
 
       # 7. Configure AWS credentials via IAM Role (OIDC)
       - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v2
+        uses: aws-actions/configure-aws-credentials@v3
         with:
           role-to-assume: arn:aws:iam::986906625933:role/OPS_TEST_ROLE 
           role-session-name: github-actions
