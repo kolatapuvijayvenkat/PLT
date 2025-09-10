@@ -22,25 +22,25 @@ jobs:
           node-version: 18
 
       - name: Build Frontend
-        working-directory: ./rundeckproject/frontend
+        working-directory: ./frontend
         run: |
           npm install
           npm run build
 
       - name: Copy Build to Backend
         run: |
-          rm -rf rundeckproject/backend/build
-          cp -r rundeckproject/frontend/build rundeckproject/backend/build
-          rm -rf rundeckproject/frontend/build
+          rm -rf backend/build
+          cp -r frontend/build backend/build
+          rm -rf frontend/build
 
       - name: Install Backend Dependencies
-        working-directory: ./rundeckproject/backend
+        working-directory: ./backend
         run: npm install --production
 
       - name: Zip Backend
         run: |
-          cd rundeckproject/backend
-          zip -r ../../app.zip ./*
+          cd backend
+          zip -r ../app.zip ./*
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v3
