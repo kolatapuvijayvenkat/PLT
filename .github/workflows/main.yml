@@ -3,57 +3,55 @@ name: Deploy Node.js App to Elastic Beanstalk
 on:
   push:
     branches:
-      - main   # deploy only when code is merged into main branch
+      - main
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
 
     steps:
-      # 1. Checkout Repo
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      # 2. Setup Node.js
       - name: Use Node.js
         uses: actions/setup-node@v3
         with:
           node-version: 18
 
-      # 3. Build Frontend
       - name: Build Frontend
-        working-directory: ./frontend
+        working-directory: ./rundeckproject/frontend
         run: |
           npm install
           npm run build
 
-      # 4. Copy Frontend Build into Backend
       - name: Copy Build to Backend
         run: |
-          rm -rf backend/build
-          cp -r frontend/build backend/build
-          rm -rf frontend/build
+          rm -rf rundeckproject/backend/build
+          cp -r rundeckproject/frontend/build rundeckproject/backend/build
+          rm -rf rundeckproject/frontend/build
 
-      # 5. Install Backend Dependencies
       - name: Install Backend Dependencies
-        working-directory: ./backend
+        working-directory: ./rundeckproject/backend
         run: npm install --production
 
-      # 6. Zip Backend for Elastic Beanstalk
       - name: Zip Backend
         run: |
-          cd backend
-          zip -r ../file.zip ./*
+          cd rundeckproject/backend
+          zip -r ../../app.zip ./*
 
-      # 7. Configure AWS credentials via IAM Role (OIDC)
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v3
         with:
-          role-to-assume: arn:aws:iam::986906625933:role/OPS_TEST_ROLE 
+          role-to-assume: arn:aws:iam::986906625933:role/OPS_TEST_ROLE
           role-session-name: github-actions
           aws-region: ${{ secrets.AWS_REGION }}
 
-      # 8. Deploy to Elastic Beanstalk
+      - name: Debug AWS Identity
+        run: aws sts get-caller-identity
+
       - name: Deploy to Elastic Beanstalk
         run: |
           aws s3 cp app.zip s3://elasticbeanstalk-${{ secrets.AWS_REGION }}-$(aws sts get-caller-identity --query Account --output text)/app-${GITHUB_SHA}.zip
