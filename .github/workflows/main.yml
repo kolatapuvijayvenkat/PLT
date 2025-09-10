@@ -43,7 +43,7 @@ jobs:
       - name: Zip Backend
         run: |
           cd backend
-          zip -r ../app.zip ./*
+          zip -r ../file.zip ./*
 
       # 7. Configure AWS credentials via IAM Role (OIDC)
       - name: Configure AWS Credentials
