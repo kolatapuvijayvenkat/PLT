@@ -1,4 +1,4 @@
-name: Create New EB Env in Dev from Prod
+name: Deploy EB Env to Dev on Merge to Develop
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   create-dev-env:
-    name: Create Dev EB Environment
+    name: Create EB Environment in Dev Account
     runs-on: ubuntu-latest
 
     steps:
@@ -19,15 +19,15 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      # 2️⃣ Configure AWS Prod Account to fetch config
+      # 2️⃣ Configure AWS Prod Account
       - name: Configure AWS Prod Account
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::986906625933:role/OPS_TEST_ROLE
           aws-region: us-east-1
 
-      # 3️⃣ Export Prod EB configuration
-      - name: Export Prod Config
+      # 3️⃣ Export Prod EB configuration as JSON
+      - name: Export EB Prod Config
         run: |
           aws elasticbeanstalk describe-configuration-settings \
             --application-name PLT \
@@ -41,53 +41,50 @@ jobs:
           role-to-assume: arn:aws:iam::045615335706:role/PLT_Test_Role
           aws-region: us-east-1
 
-      # 5️⃣ Ensure PLT application exists in Dev
-      - name: Ensure Dev Application Exists
+      # 5️⃣ Create EB Application if it does not exist
+      - name: Ensure EB Application Exists
         run: |
-          if ! aws elasticbeanstalk describe-applications --application-names PLT --query "Applications[0].ApplicationName" --output text; then
-            echo "Creating application PLT in Dev"
+          if ! aws elasticbeanstalk describe-applications --application-names PLT; then
             aws elasticbeanstalk create-application --application-name PLT
-          else
-            echo "Application PLT already exists in Dev"
           fi
 
-      # 6️⃣ Zip source code
-      - name: Package Application
+      # 6️⃣ Create a new application version
+      - name: Create EB Application Version
         run: |
-          VERSION_LABEL=build-${{ github.run_number }}
+          VERSION_LABEL="build-${{ github.run_number }}"
           echo "VERSION_LABEL=$VERSION_LABEL" >> $GITHUB_ENV
+
+          # Zip the application source
           zip -r app.zip .
 
-      # 7️⃣ Create new EB Application Version in Dev (from local zip)
-      - name: Create Application Version
-        run: |
+          # Create a new EB application version (quotes fix applied)
           aws elasticbeanstalk create-application-version \
             --application-name PLT \
-            --version-label $VERSION_LABEL \
+            --version-label "$VERSION_LABEL" \
             --source-bundle fileb://app.zip
 
-      # 8️⃣ Create new EB Environment in Dev using Prod config
-      - name: Create Dev Environment
+      # 7️⃣ Create new Dev EB Environment
+      - name: Create EB Environment in Dev
         run: |
-          EB_ENV_NAME=dev-env-${{ github.run_number }}
+          EB_ENV_NAME="dev-env-${{ github.run_number }}"
           echo "EB_ENV_NAME=$EB_ENV_NAME" >> $GITHUB_ENV
 
           aws elasticbeanstalk create-environment \
             --application-name PLT \
-            --environment-name $EB_ENV_NAME \
-            --version-label $VERSION_LABEL \
+            --environment-name "$EB_ENV_NAME" \
+            --version-label "$VERSION_LABEL" \
             --option-settings file://<(jq -c '.ConfigurationSettings[0].OptionSettings' prod-config.json)
 
-      # 9️⃣ Smoke Test the new environment
-      - name: Smoke Test
+      # 8️⃣ Wait for environment and run smoke test
+      - name: Smoke Test Application
         run: |
           echo "Waiting for environment $EB_ENV_NAME to be ready..."
-          aws elasticbeanstalk wait environment-exists --environment-names $EB_ENV_NAME
-          aws elasticbeanstalk wait environment-ready --environment-names $EB_ENV_NAME
+          aws elasticbeanstalk wait environment-exists --environment-names "$EB_ENV_NAME"
+          aws elasticbeanstalk wait environment-ready --environment-names "$EB_ENV_NAME"
 
           APP_URL=$(aws elasticbeanstalk describe-environments \
             --application-name PLT \
-            --environment-names $EB_ENV_NAME \
+            --environment-names "$EB_ENV_NAME" \
             --query 'Environments[0].CNAME' --output text)
 
           echo "Testing endpoint: http://$APP_URL"
