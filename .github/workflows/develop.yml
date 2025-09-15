@@ -3,7 +3,7 @@ name: Deploy EB Env to Dev on Merge to Develop
 on:
   push:
     branches:
-      - develop   # Trigger only on merge/push to develop
+      - develop   # Only trigger on merge/push to develop
 
 permissions:
   id-token: write
@@ -31,7 +31,7 @@ jobs:
         run: |
           aws elasticbeanstalk describe-configuration-settings \
             --application-name PLT \
-            --environment-id ${{ secrets.PROD_ENV_ID }} \
+            --environment-name ${{ secrets.PROD_ENV_NAME }} \
             > prod-config.json
 
       # 4️⃣ Configure AWS for Dev
