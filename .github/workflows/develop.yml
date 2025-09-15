@@ -1,0 +1,80 @@
+ name: EB Cross-Account Deploy
+
+on:
+  push:
+    branches:
+      - feature/*     # triggers on feature branch push
+  pull_request:
+    branches:
+      - develop       # triggers when merging to develop
+
+jobs:
+  deploy-to-dev:
+    name: Deploy EB Env in Dev Account
+    runs-on: ubuntu-latest
+
+    steps:
+      # Checkout repo
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      # Configure AWS for Prod (to fetch config)
+      - name: Configure AWS Prod Account
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::986906625933:role/OPS_TEST_ROLE
+          aws-region: us-east-1
+
+      # Export Prod Configuration Template
+      - name: Export EB Prod Config
+        run: |
+          aws elasticbeanstalk create-configuration-template \
+            --application-name PLT \
+            --environment-id ${{ secrets.PROD_ENV_ID }} \
+            --template-name PLT-Config \
+            --description "Exported from Prod for Dev deployment"
+
+      # Configure AWS for Dev
+      - name: Configure AWS Dev Account
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::045615335706:role/PLT_Test_Role 
+          aws-region: us-east-1
+
+      # Create Environment in Dev using the saved Prod template
+      - name: Create EB Env in Dev
+        run: |
+          EB_ENV_NAME=dev-env-${{ github.run_number }}
+          echo "EB_ENV_NAME=$EB_ENV_NAME" >> $GITHUB_ENV
+
+          aws elasticbeanstalk create-environment \
+            --application-name PLT \
+            --environment-name $EB_ENV_NAME \
+            --template-name PLT-Config \
+            --version-label v1
+
+      # Basic Smoke Test
+- name: Smoke Test Application
+  run: |
+    echo "Waiting for environment $EB_ENV_NAME to be ready..."
+    aws elasticbeanstalk wait environment-exists --environment-names $EB_ENV_NAME
+    aws elasticbeanstalk wait environment-ready --environment-names $EB_ENV_NAME
+
+    APP_URL=$(aws elasticbeanstalk describe-environments \
+      --application-name PLT \
+      --environment-names $EB_ENV_NAME \
+      --query 'Environments[0].CNAME' --output text)
+
+    echo "Testing endpoint: http://$APP_URL"
+    curl -f http://$APP_URL || exit 1
+
+
+      # Terminate Dev Environment After Test
+      - name: Terminate EB Env in Dev
+        if: always()
+        run: |
+          EB_ENV_NAME=$EB_ENV_NAME
+          echo "Terminating $EB_ENV_NAME ..."
+          aws elasticbeanstalk terminate-environment \
+            --environment-name $EB_ENV_NAME \
+            --terminate-resources
