@@ -31,7 +31,7 @@ jobs:
         run: |
           aws elasticbeanstalk describe-configuration-settings \
             --application-name PLT \
-            --environment-name ${{ secrets.PROD_ENV_NAME }} \
+            --environment-name PLT-env \
             > prod-config.json
 
       # 4️⃣ Configure AWS for Dev
@@ -50,14 +50,10 @@ jobs:
           # Zip the application source
           zip -r app.zip .
 
-          # Upload to Dev S3 bucket
-          aws s3 cp app.zip s3://${{ secrets.DEV_S3_BUCKET }}/app-${{ github.run_number }}.zip
-
           # Create a new EB application version
           aws elasticbeanstalk create-application-version \
             --application-name PLT \
             --version-label $VERSION_LABEL \
-            --source-bundle S3Bucket=${{ secrets.DEV_S3_BUCKET }},S3Key=app-${{ github.run_number }}.zip
 
       # 6️⃣ Create Dev EB Environment
       - name: Create EB Env in Dev
