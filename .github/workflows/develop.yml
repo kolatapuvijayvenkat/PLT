@@ -51,22 +51,20 @@ jobs:
             echo "Application PLT already exists in Dev"
           fi
 
-      # 6️⃣ Zip source code and upload to S3
+      # 6️⃣ Zip source code
       - name: Package Application
         run: |
           VERSION_LABEL=build-${{ github.run_number }}
           echo "VERSION_LABEL=$VERSION_LABEL" >> $GITHUB_ENV
           zip -r app.zip .
-          S3_BUCKET=my-dev-eb-bucket
-          aws s3 cp app.zip s3://$S3_BUCKET/app.zip
 
-      # 7️⃣ Create new EB Application Version in Dev
+      # 7️⃣ Create new EB Application Version in Dev (from local zip)
       - name: Create Application Version
         run: |
           aws elasticbeanstalk create-application-version \
             --application-name PLT \
             --version-label $VERSION_LABEL \
-            --source-bundle S3Bucket=my-dev-eb-bucket,S3Key=app.zip
+            --source-bundle fileb://app.zip
 
       # 8️⃣ Create new EB Environment in Dev using Prod config
       - name: Create Dev Environment
