@@ -3,15 +3,15 @@ name: Deploy EB Env to Dev on Merge to Develop
 on:
   push:
     branches:
-      - develop   # Trigger only on merge/push to develop
+      - develop
 
 permissions:
   id-token: write
   contents: read
 
 jobs:
-  create-dev-env:
-    name: Create EB Environment in Dev Account
+  deploy-to-dev:
+    name: Deploy EB Environment in Dev
     runs-on: ubuntu-latest
 
     steps:
@@ -26,7 +26,7 @@ jobs:
           role-to-assume: arn:aws:iam::986906625933:role/OPS_TEST_ROLE
           aws-region: us-east-1
 
-      # 3️⃣ Export Prod EB configuration as JSON
+      # 3️⃣ Export Prod EB Configuration
       - name: Export EB Prod Config
         run: |
           aws elasticbeanstalk describe-configuration-settings \
@@ -41,41 +41,36 @@ jobs:
           role-to-assume: arn:aws:iam::045615335706:role/PLT_Test_Role
           aws-region: us-east-1
 
-      # 5️⃣ Create EB Application if it does not exist
-      - name: Ensure EB Application Exists
-        run: |
-          if ! aws elasticbeanstalk describe-applications --application-names PLT; then
-            aws elasticbeanstalk create-application --application-name PLT
-          fi
-
-      # 6️⃣ Create a new application version
+      # 5️⃣ Create EB Application Version in Dev
       - name: Create EB Application Version
         run: |
+          # Ensure VERSION_LABEL is a string
           VERSION_LABEL="build-${{ github.run_number }}"
           echo "VERSION_LABEL=$VERSION_LABEL" >> $GITHUB_ENV
 
           # Zip the application source
           zip -r app.zip .
 
-          # Create a new EB application version (quotes fix applied)
+          # Create the application version
           aws elasticbeanstalk create-application-version \
             --application-name PLT \
             --version-label "$VERSION_LABEL" \
             --source-bundle fileb://app.zip
 
-      # 7️⃣ Create new Dev EB Environment
+      # 6️⃣ Create Dev EB Environment
       - name: Create EB Environment in Dev
         run: |
           EB_ENV_NAME="dev-env-${{ github.run_number }}"
           echo "EB_ENV_NAME=$EB_ENV_NAME" >> $GITHUB_ENV
 
+          # Create the environment using Prod config options
           aws elasticbeanstalk create-environment \
             --application-name PLT \
             --environment-name "$EB_ENV_NAME" \
             --version-label "$VERSION_LABEL" \
             --option-settings file://<(jq -c '.ConfigurationSettings[0].OptionSettings' prod-config.json)
 
-      # 8️⃣ Wait for environment and run smoke test
+      # 7️⃣ Smoke Test Application
       - name: Smoke Test Application
         run: |
           echo "Waiting for environment $EB_ENV_NAME to be ready..."
