@@ -41,21 +41,24 @@ jobs:
           role-to-assume: arn:aws:iam::045615335706:role/PLT_Test_Role
           aws-region: us-east-1
 
-      # 5️⃣ Create EB Application Version in Dev
+           # 5️⃣ Upload new application version to Dev
       - name: Create EB Application Version
         run: |
-          # Ensure VERSION_LABEL is a string
           VERSION_LABEL="build-${{ github.run_number }}"
           echo "VERSION_LABEL=$VERSION_LABEL" >> $GITHUB_ENV
 
           # Zip the application source
           zip -r app.zip .
 
-          # Create the application version
+          # Confirm zip exists
+          ls -lh app.zip
+
+          # Create a new EB application version
           aws elasticbeanstalk create-application-version \
             --application-name PLT \
             --version-label "$VERSION_LABEL" \
             --source-bundle fileb://app.zip
+
 
       # 6️⃣ Create Dev EB Environment
       - name: Create EB Environment in Dev
