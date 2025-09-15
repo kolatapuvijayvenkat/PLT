@@ -1,12 +1,9 @@
- name: EB Cross-Account Deploy
+name: Deploy EB Env to Dev on Merge to Develop
 
 on:
   push:
     branches:
-      - feature/*     # triggers on feature branch push
-  pull_request:
-    branches:
-      - develop       # triggers when merging to develop
+      - develop   # Only trigger when code is merged to develop branch
 
 jobs:
   deploy-to-dev:
@@ -25,23 +22,36 @@ jobs:
           role-to-assume: arn:aws:iam::986906625933:role/OPS_TEST_ROLE
           aws-region: us-east-1
 
-      # Export Prod Configuration Template
+      # Export Prod Config as JSON (cross-account safe)
       - name: Export EB Prod Config
         run: |
-          aws elasticbeanstalk create-configuration-template \
+          aws elasticbeanstalk describe-configuration-settings \
             --application-name PLT \
             --environment-id ${{ secrets.PROD_ENV_ID }} \
-            --template-name PLT-Config \
-            --description "Exported from Prod for Dev deployment"
+            > prod-config.json
 
       # Configure AWS for Dev
       - name: Configure AWS Dev Account
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::045615335706:role/PLT_Test_Role 
+          role-to-assume: arn:aws:iam::045615335706:role/PLT_Test_Role
           aws-region: us-east-1
 
-      # Create Environment in Dev using the saved Prod template
+      # Upload new application version to Dev
+      - name: Create EB Application Version
+        run: |
+          VERSION_LABEL=build-${{ github.run_number }}
+          echo "VERSION_LABEL=$VERSION_LABEL" >> $GITHUB_ENV
+
+          zip -r app.zip .
+          aws s3 cp app.zip s3://${{ secrets.DEV_S3_BUCKET }}/app-${{ github.run_number }}.zip
+
+          aws elasticbeanstalk create-application-version \
+            --application-name PLT \
+            --version-label $VERSION_LABEL \
+            --source-bundle S3Bucket=${{ secrets.DEV_S3_BUCKET }},S3Key=app-${{ github.run_number }}.zip
+
+      # Create Environment in Dev
       - name: Create EB Env in Dev
         run: |
           EB_ENV_NAME=dev-env-${{ github.run_number }}
@@ -50,30 +60,28 @@ jobs:
           aws elasticbeanstalk create-environment \
             --application-name PLT \
             --environment-name $EB_ENV_NAME \
-            --template-name PLT-Config \
-            --version-label v1
+            --version-label $VERSION_LABEL \
+            --option-settings file://<(jq -c '.ConfigurationSettings[0].OptionSettings' prod-config.json)
 
       # Basic Smoke Test
-- name: Smoke Test Application
-  run: |
-    echo "Waiting for environment $EB_ENV_NAME to be ready..."
-    aws elasticbeanstalk wait environment-exists --environment-names $EB_ENV_NAME
-    aws elasticbeanstalk wait environment-ready --environment-names $EB_ENV_NAME
+      - name: Smoke Test Application
+        run: |
+          echo "Waiting for environment $EB_ENV_NAME to be ready..."
+          aws elasticbeanstalk wait environment-exists --environment-names $EB_ENV_NAME
+          aws elasticbeanstalk wait environment-ready --environment-names $EB_ENV_NAME
 
-    APP_URL=$(aws elasticbeanstalk describe-environments \
-      --application-name PLT \
-      --environment-names $EB_ENV_NAME \
-      --query 'Environments[0].CNAME' --output text)
+          APP_URL=$(aws elasticbeanstalk describe-environments \
+            --application-name PLT \
+            --environment-names $EB_ENV_NAME \
+            --query 'Environments[0].CNAME' --output text)
 
-    echo "Testing endpoint: http://$APP_URL"
-    curl -f http://$APP_URL || exit 1
-
+          echo "Testing endpoint: http://$APP_URL"
+          curl -f http://$APP_URL || exit 1
 
       # Terminate Dev Environment After Test
       - name: Terminate EB Env in Dev
         if: always()
         run: |
-          EB_ENV_NAME=$EB_ENV_NAME
           echo "Terminating $EB_ENV_NAME ..."
           aws elasticbeanstalk terminate-environment \
             --environment-name $EB_ENV_NAME \
