@@ -3,7 +3,11 @@ name: Deploy EB Env to Dev on Merge to Develop
 on:
   push:
     branches:
-      - develop   # Only trigger when code is merged to develop branch
+      - develop   # Trigger only on merge/push to develop
+
+permissions:
+  id-token: write
+  contents: read
 
 jobs:
   deploy-to-dev:
@@ -11,18 +15,18 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Checkout repo
+      # 1️⃣ Checkout code
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      # Configure AWS for Prod (to fetch config)
+      # 2️⃣ Configure AWS for Prod (fetch config)
       - name: Configure AWS Prod Account
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::986906625933:role/OPS_TEST_ROLE
           aws-region: us-east-1
 
-      # Export Prod Config as JSON (cross-account safe)
+      # 3️⃣ Export Prod EB configuration as JSON
       - name: Export EB Prod Config
         run: |
           aws elasticbeanstalk describe-configuration-settings \
@@ -30,28 +34,32 @@ jobs:
             --environment-id ${{ secrets.PROD_ENV_ID }} \
             > prod-config.json
 
-      # Configure AWS for Dev
+      # 4️⃣ Configure AWS for Dev
       - name: Configure AWS Dev Account
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::045615335706:role/PLT_Test_Role
           aws-region: us-east-1
 
-      # Upload new application version to Dev
+      # 5️⃣ Upload new application version to Dev
       - name: Create EB Application Version
         run: |
           VERSION_LABEL=build-${{ github.run_number }}
           echo "VERSION_LABEL=$VERSION_LABEL" >> $GITHUB_ENV
 
+          # Zip the application source
           zip -r app.zip .
+
+          # Upload to Dev S3 bucket
           aws s3 cp app.zip s3://${{ secrets.DEV_S3_BUCKET }}/app-${{ github.run_number }}.zip
 
+          # Create a new EB application version
           aws elasticbeanstalk create-application-version \
             --application-name PLT \
             --version-label $VERSION_LABEL \
             --source-bundle S3Bucket=${{ secrets.DEV_S3_BUCKET }},S3Key=app-${{ github.run_number }}.zip
 
-      # Create Environment in Dev
+      # 6️⃣ Create Dev EB Environment
       - name: Create EB Env in Dev
         run: |
           EB_ENV_NAME=dev-env-${{ github.run_number }}
@@ -63,7 +71,7 @@ jobs:
             --version-label $VERSION_LABEL \
             --option-settings file://<(jq -c '.ConfigurationSettings[0].OptionSettings' prod-config.json)
 
-      # Basic Smoke Test
+      # 7️⃣ Smoke Test
       - name: Smoke Test Application
         run: |
           echo "Waiting for environment $EB_ENV_NAME to be ready..."
@@ -78,7 +86,7 @@ jobs:
           echo "Testing endpoint: http://$APP_URL"
           curl -f http://$APP_URL || exit 1
 
-      # Terminate Dev Environment After Test
+      # 8️⃣ Terminate Dev Environment after testing
       - name: Terminate EB Env in Dev
         if: always()
         run: |
