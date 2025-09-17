@@ -48,21 +48,28 @@ jobs:
           role-to-assume: arn:aws:iam::045615335706:role/PLT_Test_Role
           aws-region: us-east-1
 
-      # 5️⃣ Create new configuration template in Dev (from Prod)
+            # 5️⃣ Create new configuration template in Dev (from Prod)
       - name: Create EB Config Template in Dev
         run: |
           TEMPLATE_NAME="prod-template-${{ github.run_number }}"
           echo "TEMPLATE_NAME=$TEMPLATE_NAME" >> $GITHUB_ENV
 
-          PLATFORM_ARN=$(jq -r '.Environments[0].PlatformArn // empty' prod-env.json)
+          # Try to get PlatformArn from prod env
+          PLATFORM_NAME=$(jq -r '.Environments[0].PlatformArn' prod-env.json | sed 's|^arn:aws:elasticbeanstalk:[^:]*::platform/||')
           SOLUTION_STACK=$(jq -r '.ConfigurationSettings[0].SolutionStackName // empty' prod-config.json)
 
-          if [ -n "$PLATFORM_ARN" ]; then
-            echo "Using PlatformArn: $PLATFORM_ARN"
+          if [ -n "$PLATFORM_NAME" ]; then
+            echo "Looking up full ARN for platform: $PLATFORM_NAME"
+            FULL_PLATFORM_ARN=$(aws elasticbeanstalk list-platform-versions \
+              --query "PlatformSummaryList[?contains(PlatformArn, '$PLATFORM_NAME')].PlatformArn | [0]" \
+              --output text)
+
+            echo "Resolved PlatformArn: $FULL_PLATFORM_ARN"
+
             aws elasticbeanstalk create-configuration-template \
               --application-name PLT \
               --template-name "$TEMPLATE_NAME" \
-              --platform-arn "$PLATFORM_ARN" \
+              --platform-arn "$FULL_PLATFORM_ARN" \
               --option-settings file://<(jq -c '.ConfigurationSettings[0].OptionSettings' prod-config.json)
           else
             echo "Using Solution Stack: $SOLUTION_STACK"
@@ -72,6 +79,7 @@ jobs:
               --solution-stack-name "$SOLUTION_STACK" \
               --option-settings file://<(jq -c '.ConfigurationSettings[0].OptionSettings' prod-config.json)
           fi
+
 
       # 6️⃣ Create new Dev EB Environment
       - name: Create EB Environment in Dev
