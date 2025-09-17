@@ -59,30 +59,30 @@ jobs:
           echo "Filtered OptionSettings saved to dev-options.json"
           cat dev-options.json
 
-      # 6️⃣ Create Dev EB Environment using latest available Node.js platform
+      # 6️⃣ Create Dev EB Environment using latest Node.js 22 stack
       - name: Create EB Environment in Dev
         run: |
           EB_ENV_NAME="dev-env-${{ github.run_number }}"
           echo "EB_ENV_NAME=$EB_ENV_NAME" >> $GITHUB_ENV
 
-          # Get the latest available Node.js platform ARN in Dev account
-          PLATFORM_ARN=$(aws elasticbeanstalk list-platform-versions \
-            --query "PlatformSummaryList[?contains(PlatformCategory,'Node.js') && PlatformStatus=='Ready'] | [-1].PlatformArn" \
+          # Get latest Node.js 22 stack dynamically
+          LATEST_NODE_STACK=$(aws elasticbeanstalk list-available-solution-stacks \
+            --query "SolutionStacks[?contains(@, 'Node.js 22')]|[0]" \
             --output text)
 
-          if [ -z "$PLATFORM_ARN" ] || [ "$PLATFORM_ARN" = "None" ]; then
-            echo "❌ No ready Node.js platform found in Dev account"
+          if [ -z "$LATEST_NODE_STACK" ] || [ "$LATEST_NODE_STACK" = "None" ]; then
+            echo "❌ No Node.js 22 solution stack found in Dev account"
             exit 1
           fi
 
-          echo "Using Platform ARN: $PLATFORM_ARN"
-          echo "PLATFORM_ARN=$PLATFORM_ARN" >> $GITHUB_ENV
+          echo "✅ Using Solution Stack: $LATEST_NODE_STACK"
+          echo "LATEST_NODE_STACK=$LATEST_NODE_STACK" >> $GITHUB_ENV
 
           # Create the Dev environment
           aws elasticbeanstalk create-environment \
             --application-name PLT \
             --environment-name "$EB_ENV_NAME" \
-            --platform-arn "$PLATFORM_ARN" \
+            --solution-stack-name "$LATEST_NODE_STACK" \
             --option-settings file://dev-options.json
 
       # 7️⃣ Smoke Test Dev Environment
