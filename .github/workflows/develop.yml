@@ -3,7 +3,7 @@ name: Deploy EB Env to Dev on Merge to Develop
 on:
   push:
     branches:
-      - develop   # Trigger only when merging/pushing to develop
+      - develop   # Trigger only on merge/push to develop
 
 permissions:
   id-token: write
@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout repo
+      # 1️⃣ Checkout code
       - name: Checkout Code
         uses: actions/checkout@v3
 
@@ -26,50 +26,47 @@ jobs:
           role-to-assume: arn:aws:iam::986906625933:role/OPS_TEST_ROLE
           aws-region: us-east-1
 
-      # 3️⃣ Get Prod environment ID
-      - name: Get Prod Environment ID
+      # 3️⃣ Export Prod EB configuration as JSON
+      - name: Export Prod EB Config
         run: |
-          PROD_ENV_ID=$(aws elasticbeanstalk describe-environments \
+          aws elasticbeanstalk describe-configuration-settings \
             --application-name PLT \
-            --environment-names PLT-env \
-            --query 'Environments[0].EnvironmentId' \
-            --output text)
+            --environment-name PLT-env \
+            > prod-config.json
 
-          echo "PROD_ENV_ID=$PROD_ENV_ID" >> $GITHUB_ENV
-          echo "Prod Env ID: $PROD_ENV_ID"
-
-      # 4️⃣ Export Prod EB Configuration Template
-      - name: Export Prod Config Template
-        run: |
-          TEMPLATE_NAME="prod-template-${{ github.run_number }}"
-          echo "TEMPLATE_NAME=$TEMPLATE_NAME" >> $GITHUB_ENV
-
-          aws elasticbeanstalk create-configuration-template \
-            --application-name PLT \
-            --environment-id "$PROD_ENV_ID" \
-            --template-name "$TEMPLATE_NAME" \
-            --description "Exported from Prod for Dev deployment"
-
-      # 5️⃣ Extract Prod Version Label
-      - name: Extract Prod Version Label
-        run: |
-          VERSION_LABEL=$(aws elasticbeanstalk describe-environments \
-            --application-name PLT \
-            --environment-names PLT-env \
-            --query 'Environments[0].VersionLabel' \
-            --output text)
-
-          echo "VERSION_LABEL=$VERSION_LABEL" >> $GITHUB_ENV
-          echo "Using version: $VERSION_LABEL"
-
-      # 6️⃣ Configure AWS Dev Account
+      # 4️⃣ Configure AWS Dev Account
       - name: Configure AWS Dev Account
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::045615335706:role/PLT_Test_Role
           aws-region: us-east-1
 
-      # 7️⃣ Create Dev EB Environment from Prod Template
+      # 5️⃣ Ensure PLT application exists in Dev
+      - name: Ensure PLT Application Exists in Dev
+        run: |
+          if ! aws elasticbeanstalk describe-applications \
+            --query "Applications[?ApplicationName=='PLT'] | length(@)" \
+            --output text | grep -q '^1$'; then
+            echo "PLT app not found in Dev, creating..."
+            aws elasticbeanstalk create-application \
+              --application-name PLT \
+              --description "PLT app for Dev testing"
+          else
+            echo "PLT app already exists in Dev"
+          fi
+
+      # 6️⃣ Create new Configuration Template in Dev
+      - name: Create Configuration Template
+        run: |
+          TEMPLATE_NAME="prod-template-${{ github.run_number }}"
+          echo "TEMPLATE_NAME=$TEMPLATE_NAME" >> $GITHUB_ENV
+
+          aws elasticbeanstalk create-configuration-template \
+            --application-name PLT \
+            --template-name "$TEMPLATE_NAME" \
+            --source-configuration file://<(jq -c '{ApplicationName:"PLT", TemplateName:"dummy", EnvironmentId:"", EnvironmentName:""} + {OptionSettings:.ConfigurationSettings[0].OptionSettings}' prod-config.json)
+
+      # 7️⃣ Create new Dev EB Environment
       - name: Create EB Environment in Dev
         run: |
           EB_ENV_NAME="dev-env-${{ github.run_number }}"
@@ -78,10 +75,9 @@ jobs:
           aws elasticbeanstalk create-environment \
             --application-name PLT \
             --environment-name "$EB_ENV_NAME" \
-            --template-name "$TEMPLATE_NAME" \
-            --version-label "$VERSION_LABEL"
+            --template-name "$TEMPLATE_NAME"
 
-      # 8️⃣ Smoke Test Dev Environment
+      # 8️⃣ Smoke Test the Environment
       - name: Smoke Test Dev Environment
         run: |
           echo "Waiting for environment $EB_ENV_NAME to be ready..."
