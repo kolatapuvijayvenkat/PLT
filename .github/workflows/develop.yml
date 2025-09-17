@@ -26,9 +26,16 @@ jobs:
           role-to-assume: arn:aws:iam::986906625933:role/OPS_TEST_ROLE
           aws-region: us-east-1
 
-      # 3️⃣ Export Prod EB configuration as JSON
+      # 3️⃣ Export Prod EB environment details + configuration
       - name: Export Prod EB Config
         run: |
+          # Save full environment details (includes PlatformArn with version)
+          aws elasticbeanstalk describe-environments \
+            --application-name PLT \
+            --environment-names PLT-env \
+            > prod-env.json
+
+          # Save configuration separately (includes option settings)
           aws elasticbeanstalk describe-configuration-settings \
             --application-name PLT \
             --environment-name PLT-env \
@@ -41,13 +48,13 @@ jobs:
           role-to-assume: arn:aws:iam::045615335706:role/PLT_Test_Role
           aws-region: us-east-1
 
-      # 5️⃣ Create Configuration Template in Dev (PlatformArn or SolutionStackName)
-      - name: Create Configuration Template
+      # 5️⃣ Create new configuration template in Dev (from Prod)
+      - name: Create EB Config Template in Dev
         run: |
           TEMPLATE_NAME="prod-template-${{ github.run_number }}"
           echo "TEMPLATE_NAME=$TEMPLATE_NAME" >> $GITHUB_ENV
 
-          PLATFORM_ARN=$(jq -r '.ConfigurationSettings[0].PlatformArn // empty' prod-config.json)
+          PLATFORM_ARN=$(jq -r '.Environments[0].PlatformArn // empty' prod-env.json)
           SOLUTION_STACK=$(jq -r '.ConfigurationSettings[0].SolutionStackName // empty' prod-config.json)
 
           if [ -n "$PLATFORM_ARN" ]; then
