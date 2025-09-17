@@ -19,7 +19,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      # 2️⃣ Configure AWS Prod Account
+      # 2️⃣ Configure AWS Prod Account (to fetch EB config)
       - name: Configure AWS Prod Account
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -46,36 +46,25 @@ jobs:
           role-to-assume: arn:aws:iam::045615335706:role/PLT_Test_Role
           aws-region: us-east-1
 
-     # 5️⃣ Create Dev EB Environment directly (no template)
-- name: Create EB Environment in Dev
-  run: |
-    EB_ENV_NAME="dev-env-${{ github.run_number }}"
-    echo "EB_ENV_NAME=$EB_ENV_NAME" >> $GITHUB_ENV
-
-    # Option 1: specify a solution stack available in Dev
-    SOLUTION_STACK="64bit Amazon Linux 2023 v6.6.4 running Node.js 22"
-
-    # Create environment using Prod configuration options but Dev stack
-    aws elasticbeanstalk create-environment \
-      --application-name PLT \
-      --environment-name "$EB_ENV_NAME" \
-      --solution-stack-name "$SOLUTION_STACK" \
-      --option-settings file://<(jq -c '.ConfigurationSettings[0].OptionSettings' prod-config.json)
-
-
-
-      # 6️⃣ Create Dev Environment from template
-      - name: Create EB Environment in Dev
+      # 5️⃣ Create Dev EB Environment directly (no template)
+      - name: Create Dev EB Environment
         run: |
           EB_ENV_NAME="dev-env-${{ github.run_number }}"
           echo "EB_ENV_NAME=$EB_ENV_NAME" >> $GITHUB_ENV
 
+          # Choose a solution stack available in Dev
+          SOLUTION_STACK="64bit Amazon Linux 2023 v6.6.4 running Node.js 22"
+
+          echo "Creating Dev environment '$EB_ENV_NAME' with stack '$SOLUTION_STACK'"
+
+          # Create environment using Prod OptionSettings
           aws elasticbeanstalk create-environment \
             --application-name PLT \
             --environment-name "$EB_ENV_NAME" \
-            --template-name "$TEMPLATE_NAME"
+            --solution-stack-name "$SOLUTION_STACK" \
+            --option-settings file://<(jq -c '.ConfigurationSettings[0].OptionSettings' prod-config.json)
 
-      # 7️⃣ Smoke Test Dev Environment
+      # 6️⃣ Wait for Dev environment to be ready and smoke test
       - name: Smoke Test Dev Environment
         run: |
           echo "Waiting for environment $EB_ENV_NAME to be ready..."
