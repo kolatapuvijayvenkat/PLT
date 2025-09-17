@@ -3,7 +3,7 @@ name: Deploy EB Env to Dev on Merge to Develop
 on:
   push:
     branches:
-      - develop   # Trigger only on merge/push to develop
+      - develop
 
 permissions:
   id-token: write
@@ -15,18 +15,16 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout code
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      # 2️⃣ Configure AWS Prod Account
+      # Configure AWS Prod (for fetching config)
       - name: Configure AWS Prod Account
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::986906625933:role/OPS_TEST_ROLE
           aws-region: us-east-1
 
-      # 3️⃣ Export Prod EB configuration + environment details
       - name: Export Prod EB Config
         run: |
           aws elasticbeanstalk describe-configuration-settings \
@@ -34,51 +32,29 @@ jobs:
             --environment-name PLT-env \
             > prod-config.json
 
-          aws elasticbeanstalk describe-environments \
-            --application-name PLT \
-            --environment-names PLT-env \
-            > prod-env.json
-
-      # 4️⃣ Configure AWS Dev Account
+      # Configure AWS Dev
       - name: Configure AWS Dev Account
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::045615335706:role/PLT_Test_Role
           aws-region: us-east-1
 
-      # 5️⃣ Pick a ready Node.js platform in Dev
-      - name: Pick Latest Node.js Platform in Dev
-        id: platform
-        run: |
-          PLATFORM_NAME=$(aws elasticbeanstalk list-platform-versions \
-            --query "PlatformSummaryList[?PlatformName!=null && contains(PlatformName,'Node.js') && contains(PlatformStatus,'Ready')].[PlatformArn] | [0]" \
-            --output text)
-
-          if [ -z "$PLATFORM_NAME" ] || [ "$PLATFORM_NAME" = "None" ]; then
-            echo "❌ No ready Node.js platform found in Dev account"
-            exit 1
-          fi
-
-          echo "Using Platform ARN: $PLATFORM_NAME"
-
-          # Export safely to GitHub env
-          echo "PLATFORM_NAME<<EOF" >> $GITHUB_ENV
-          echo "$PLATFORM_NAME" >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
-
-      # 6️⃣ Create Dev Environment using Prod OptionSettings
-      - name: Create EB Environment in Dev
+      # Create EB Environment in Dev using a known platform
+      - name: Create Dev Environment
         run: |
           EB_ENV_NAME="dev-env-${{ github.run_number }}"
           echo "EB_ENV_NAME=$EB_ENV_NAME" >> $GITHUB_ENV
 
+          # Use a known ready platform in Dev account (replace with actual ARN from Dev)
+          PLATFORM_ARN="arn:aws:elasticbeanstalk:us-east-1::platform/Node.js 22 running on 64bit Amazon Linux 2023/6.6.4"
+
           aws elasticbeanstalk create-environment \
             --application-name PLT \
             --environment-name "$EB_ENV_NAME" \
-            --platform-arn "$PLATFORM_NAME" \
+            --platform-arn "$PLATFORM_ARN" \
             --option-settings file://<(jq -c '.ConfigurationSettings[0].OptionSettings' prod-config.json)
 
-      # 7️⃣ Smoke Test Dev Environment
+      # Smoke Test
       - name: Smoke Test Dev Environment
         run: |
           echo "Waiting for environment $EB_ENV_NAME to be ready..."
