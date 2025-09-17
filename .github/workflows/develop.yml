@@ -59,11 +59,15 @@ jobs:
           echo "Filtered OptionSettings saved to dev-options.json"
           cat dev-options.json
 
-      # 6️⃣ Select latest ready Node.js platform in Dev
-      - name: Select Node.js Platform
+      # 6️⃣ Create Dev EB Environment using latest available Node.js platform
+      - name: Create EB Environment in Dev
         run: |
+          EB_ENV_NAME="dev-env-${{ github.run_number }}"
+          echo "EB_ENV_NAME=$EB_ENV_NAME" >> $GITHUB_ENV
+
+          # Get the latest available Node.js platform ARN in Dev account
           PLATFORM_ARN=$(aws elasticbeanstalk list-platform-versions \
-            --query "PlatformSummaryList[?PlatformName != null && contains(PlatformName,'Node.js') && PlatformStatus=='Ready'] | [-1].PlatformArn" \
+            --query "PlatformSummaryList[?contains(PlatformCategory,'Node.js') && PlatformStatus=='Ready'] | [-1].PlatformArn" \
             --output text)
 
           if [ -z "$PLATFORM_ARN" ] || [ "$PLATFORM_ARN" = "None" ]; then
@@ -71,24 +75,17 @@ jobs:
             exit 1
           fi
 
-          echo "PLATFORM_ARN=$PLATFORM_ARN" >> $GITHUB_ENV
           echo "Using Platform ARN: $PLATFORM_ARN"
+          echo "PLATFORM_ARN=$PLATFORM_ARN" >> $GITHUB_ENV
 
-      # 7️⃣ Create Dev EB Environment
-      - name: Create EB Environment in Dev
-        run: |
-          EB_ENV_NAME="dev-env-${{ github.run_number }}"
-          echo "EB_ENV_NAME=$EB_ENV_NAME" >> $GITHUB_ENV
-
-          echo "Creating Dev environment '$EB_ENV_NAME' with platform ARN '$PLATFORM_ARN'"
-
+          # Create the Dev environment
           aws elasticbeanstalk create-environment \
             --application-name PLT \
             --environment-name "$EB_ENV_NAME" \
             --platform-arn "$PLATFORM_ARN" \
             --option-settings file://dev-options.json
 
-      # 8️⃣ Smoke Test Dev Environment
+      # 7️⃣ Smoke Test Dev Environment
       - name: Smoke Test Dev Environment
         run: |
           echo "Waiting for environment $EB_ENV_NAME to be ready..."
