@@ -46,16 +46,19 @@ jobs:
           role-to-assume: arn:aws:iam::045615335706:role/PLT_Test_Role
           aws-region: us-east-1
 
-      # 5️⃣ Filter Prod OptionSettings + Inject Dev VPC settings
+            # 5️⃣ Filter Prod OptionSettings + Inject Dev VPC settings
       - name: Prepare Dev OptionSettings
         run: |
-          # Filter out incompatible namespaces from prod config
-          jq '[.ConfigurationSettings[0].OptionSettings[] 
-              | select(.Namespace != "aws:autoscaling:launchconfiguration" 
+          # Filter out unwanted/incompatible namespaces and empty values
+          jq '[.ConfigurationSettings[0].OptionSettings[]
+              | select(.Namespace != "aws:autoscaling:launchconfiguration"
                        and .Namespace != "aws:ec2:instances"
                        and .Namespace != "aws:elasticbeanstalk:application:environment"
                        and .Namespace != "aws:elasticbeanstalk:environment:proxy"
-                       and .Namespace != "aws:elasticbeanstalk:environment:process")]' \
+                       and .Namespace != "aws:elasticbeanstalk:environment:process"
+                       and .OptionName != "ExternalExtensionsS3Key"
+                       and .Value != null
+                       and .Value != "")]' \
               prod-config.json > dev-options.json
 
           echo "Filtered OptionSettings saved to dev-options.json"
