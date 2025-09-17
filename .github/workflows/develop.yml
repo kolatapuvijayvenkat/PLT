@@ -3,7 +3,7 @@ name: Deploy EB Env to Dev on Merge to Develop
 on:
   push:
     branches:
-      - develop   # Trigger only on merge/push to develop
+      - develop
 
 permissions:
   id-token: write
@@ -19,7 +19,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      # 2️⃣ Configure AWS Prod Account (to fetch Prod EB config)
+      # 2️⃣ Configure AWS Prod Account (to fetch EB config)
       - name: Configure AWS Prod Account
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -41,35 +41,24 @@ jobs:
           role-to-assume: arn:aws:iam::045615335706:role/PLT_Test_Role
           aws-region: us-east-1
 
-      # 5️⃣ Find a ready Node.js platform in Dev
-      - name: Pick Ready Node.js Platform
-        run: |
-          PLATFORM_ARN=$(aws elasticbeanstalk list-platform-versions \
-            --query "PlatformSummaryList[?PlatformName!=null && contains(PlatformName,'Node.js') && PlatformStatus=='Ready'] | [0].PlatformArn" \
-            --output text)
-
-          if [ -z "$PLATFORM_ARN" ] || [ "$PLATFORM_ARN" = "None" ]; then
-            echo "❌ No ready Node.js platform found in Dev account"
-            exit 1
-          fi
-
-          echo "PLATFORM_ARN=$PLATFORM_ARN" >> $GITHUB_ENV
-          echo "Using Platform ARN: $PLATFORM_ARN"
-
-      # 6️⃣ Create Dev EB Environment using Prod OptionSettings
-      - name: Create Dev EB Environment
+      # 5️⃣ Create Dev EB Environment using fixed Platform ARN
+      - name: Create EB Environment in Dev
         run: |
           EB_ENV_NAME="dev-env-${{ github.run_number }}"
           echo "EB_ENV_NAME=$EB_ENV_NAME" >> $GITHUB_ENV
 
-          echo "Creating Dev environment '$EB_ENV_NAME' on platform '$PLATFORM_ARN' with Prod settings"
+          # Use the available BETA Node.js 12 platform in Dev
+          PLATFORM_ARN="arn:aws:elasticbeanstalk:us-east-1::platform/(BETA) Node.js 12 running on 64bit Amazon Linux 2/0.1.0"
+
+          echo "Creating Dev environment '$EB_ENV_NAME' with platform ARN '$PLATFORM_ARN'"
+
           aws elasticbeanstalk create-environment \
             --application-name PLT \
             --environment-name "$EB_ENV_NAME" \
             --platform-arn "$PLATFORM_ARN" \
             --option-settings file://<(jq -c '.ConfigurationSettings[0].OptionSettings' prod-config.json)
 
-      # 7️⃣ Smoke Test Dev Environment
+      # 6️⃣ Smoke Test Dev Environment
       - name: Smoke Test Dev Environment
         run: |
           echo "Waiting for environment $EB_ENV_NAME to be ready..."
