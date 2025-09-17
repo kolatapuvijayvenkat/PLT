@@ -46,25 +46,35 @@ jobs:
           role-to-assume: arn:aws:iam::045615335706:role/PLT_Test_Role
           aws-region: us-east-1
 
-            # 5️⃣ Filter Prod OptionSettings + Inject Dev VPC settings
+      # 5️⃣ Prepare Dev OptionSettings + VPC + IAM profile
       - name: Prepare Dev OptionSettings
         run: |
-          # Filter out unwanted/incompatible namespaces and empty values
-          jq '[.ConfigurationSettings[0].OptionSettings[]
-              | select(.Namespace != "aws:autoscaling:launchconfiguration"
+          # Filter out incompatible namespaces
+          jq '[.ConfigurationSettings[0].OptionSettings[] 
+              | select(.Namespace != "aws:autoscaling:launchconfiguration" 
                        and .Namespace != "aws:ec2:instances"
                        and .Namespace != "aws:elasticbeanstalk:application:environment"
                        and .Namespace != "aws:elasticbeanstalk:environment:proxy"
-                       and .Namespace != "aws:elasticbeanstalk:environment:process"
-                       and .OptionName != "ExternalExtensionsS3Key"
-                       and .Value != null
-                       and .Value != "")]' \
+                       and .Namespace != "aws:elasticbeanstalk:environment:process")]' \
               prod-config.json > dev-options.json
 
           echo "Filtered OptionSettings saved to dev-options.json"
 
-          # ✅ Inject VPC/Subnets/SecurityGroups for Dev
-          jq '. + [
+          # Fetch EB instance profile dynamically
+          IAM_INSTANCE_PROFILE=$(aws iam list-instance-profiles \
+            --query "InstanceProfiles[?contains(InstanceProfileName, 'elasticbeanstalk')].InstanceProfileName | [0]" \
+            --output text)
+
+          if [ -z "$IAM_INSTANCE_PROFILE" ] || [ "$IAM_INSTANCE_PROFILE" = "None" ]; then
+            echo "❌ No Elastic Beanstalk instance profile found in Dev account"
+            exit 1
+          fi
+
+          echo "✅ Using IAM Instance Profile: $IAM_INSTANCE_PROFILE"
+          echo "IAM_INSTANCE_PROFILE=$IAM_INSTANCE_PROFILE" >> $GITHUB_ENV
+
+          # Inject VPC, subnets, security groups, and IAM instance profile
+          jq --arg profile "$IAM_INSTANCE_PROFILE" '. + [
               {
                 "Namespace": "aws:ec2:vpc",
                 "OptionName": "VPCId",
@@ -84,19 +94,24 @@ jobs:
                 "Namespace": "aws:autoscaling:launchconfiguration",
                 "OptionName": "SecurityGroups",
                 "Value": "sg-017eb9b8564826a7e"
+              },
+              {
+                "Namespace": "aws:autoscaling:launchconfiguration",
+                "OptionName": "IamInstanceProfile",
+                "Value": $profile
               }
           ]' dev-options.json > tmp.json && mv tmp.json dev-options.json
 
           echo "✅ Final Dev OptionSettings:"
           cat dev-options.json
 
-      # 6️⃣ Create Dev EB Environment using Node.js 22 stack
+      # 6️⃣ Create Dev EB Environment using latest Node.js 22 stack
       - name: Create EB Environment in Dev
         run: |
           EB_ENV_NAME="dev-env-${{ github.run_number }}"
           echo "EB_ENV_NAME=$EB_ENV_NAME" >> $GITHUB_ENV
 
-          # Get latest Node.js 22 stack dynamically
+          # Get latest Node.js 22 solution stack dynamically
           LATEST_NODE_STACK=$(aws elasticbeanstalk list-available-solution-stacks \
             --query "SolutionStacks[?contains(@, 'Node.js 22')]|[0]" \
             --output text)
