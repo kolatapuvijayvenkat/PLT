@@ -46,20 +46,23 @@ jobs:
           role-to-assume: arn:aws:iam::045615335706:role/PLT_Test_Role
           aws-region: us-east-1
 
-      # 5️⃣ Prepare Dev OptionSettings (filter incompatible namespaces and add VPC + instance profile)
+      # 5️⃣ Filter Prod OptionSettings + Inject Dev VPC settings
       - name: Prepare Dev OptionSettings
         run: |
-          # Filter incompatible namespaces from Prod config
+          # Filter out incompatible namespaces and empty options from Prod config
           jq '[.ConfigurationSettings[0].OptionSettings[] 
               | select(.Namespace != "aws:autoscaling:launchconfiguration"
                        and .Namespace != "aws:ec2:instances"
                        and .Namespace != "aws:elasticbeanstalk:application:environment"
                        and .Namespace != "aws:elasticbeanstalk:environment:proxy"
                        and .Namespace != "aws:elasticbeanstalk:environment:process"
-                       and .OptionName != "Custom Availability Zones")]' \
+                       and .OptionName != "ExternalExtensionsS3Bucket"
+                       and .Value != "" )]' \
               prod-config.json > dev-options.json
 
-          # Inject required Dev VPC settings
+          echo "Filtered OptionSettings saved to dev-options.json"
+
+          # ✅ Inject VPC/Subnets/SecurityGroups for Dev
           jq '. + [
               {
                 "Namespace": "aws:ec2:vpc",
@@ -85,11 +88,6 @@ jobs:
                 "Namespace": "aws:autoscaling:launchconfiguration",
                 "OptionName": "IamInstanceProfile",
                 "Value": "aws-elasticbeanstalk-ec2-role"
-              },
-              {
-                "Namespace": "aws:elasticbeanstalk:environment:process:default",
-                "OptionName": "MatcherHTTPCode",
-                "Value": "200"
               }
           ]' dev-options.json > tmp.json && mv tmp.json dev-options.json
 
