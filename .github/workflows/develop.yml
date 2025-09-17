@@ -53,12 +53,12 @@ jobs:
           echo "TEMPLATE_NAME=$TEMPLATE_NAME" >> $GITHUB_ENV
 
           # Extract the platform part (e.g. "Node.js 22 running on 64bit Amazon Linux 2023/6.6.4")
-          PLATFORM_NAME=$(jq -r '.Environments[0].PlatformArn' prod-env.json | sed 's|^arn:aws:elasticbeanstalk:[^:]*::platform/||' | cut -d/ -f1)
-          echo "Prod Platform Name: $PLATFORM_NAME"
+          PLATFORM_ARN=$(jq -r '.Environments[0].PlatformArn' prod-env.json)
+          echo "Prod Platform ARN: $PLATFORM_ARN"
 
           # Look up full ARN including version suffix
           FULL_PLATFORM_ARN=$(aws elasticbeanstalk list-platform-versions \
-            --query "PlatformSummaryList[?contains(PlatformArn, '$PLATFORM_NAME')].PlatformArn | [0]" \
+            --query "PlatformSummaryList[?PlatformArn=='$PLATFORM_ARN'].PlatformArn | [0]" \
             --output text)
 
           if [ "$FULL_PLATFORM_ARN" = "None" ] || [ -z "$FULL_PLATFORM_ARN" ]; then
@@ -68,13 +68,10 @@ jobs:
 
           echo "Resolved PlatformArn: $FULL_PLATFORM_ARN"
 
-          # Correct the ARN format by ensuring it matches the expected pattern
-          FULL_PLATFORM_ARN=$(echo "$FULL_PLATFORM_ARN" | sed 's|arn:aws:elasticbeanstalk:[^:]*::platform/||')
-
           aws elasticbeanstalk create-configuration-template \
             --application-name PLT \
             --template-name "$TEMPLATE_NAME" \
-            --platform-arn "arn:aws:elasticbeanstalk:us-east-1::platform/$FULL_PLATFORM_ARN" \
+            --platform-arn "$FULL_PLATFORM_ARN" \
             --option-settings file://<(jq -c '.ConfigurationSettings[0].OptionSettings' prod-config.json)
 
       # 6️⃣ Create Dev Environment from template
