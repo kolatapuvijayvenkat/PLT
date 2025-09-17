@@ -60,17 +60,17 @@ jobs:
 
           # Create a temp option settings file with defaults
           cat <<EOF > dev-options.json
-[
-  { "Namespace": "aws:ec2:vpc", "OptionName": "VPCId", "Value": "$VPC_ID" },
-  { "Namespace": "aws:ec2:vpc", "OptionName": "Subnets", "Value": "$SUBNETS" },
-  { "Namespace": "aws:ec2:vpc", "OptionName": "ELBSubnets", "Value": "$SUBNETS" },
-  { "Namespace": "aws:autoscaling:launchconfiguration", "OptionName": "SecurityGroups", "Value": "$SECURITY_GROUP" },
-  { "Namespace": "aws:autoscaling:launchconfiguration", "OptionName": "IamInstanceProfile", "Value": "aws-elasticbeanstalk-ec2-role" },
-  { "Namespace": "aws:elbv2:loadbalancer", "OptionName": "IdleTimeout", "Value": "60" },
-  { "Namespace": "aws:elbv2:loadbalancer", "OptionName": "AccessLogsS3Bucket", "Value": "elasticbeanstalk-accesslogs" },
-  { "Namespace": "aws:elasticbeanstalk:environment:process:default", "OptionName": "MatcherHTTPCode", "Value": "200" }
-]
-EOF
+          [
+            { "Namespace": "aws:ec2:vpc", "OptionName": "VPCId", "Value": "$VPC_ID" },
+            { "Namespace": "aws:ec2:vpc", "OptionName": "Subnets", "Value": "$SUBNETS" },
+            { "Namespace": "aws:ec2:vpc", "OptionName": "ELBSubnets", "Value": "$SUBNETS" },
+            { "Namespace": "aws:autoscaling:launchconfiguration", "OptionName": "SecurityGroups", "Value": "$SECURITY_GROUP" },
+            { "Namespace": "aws:autoscaling:launchconfiguration", "OptionName": "IamInstanceProfile", "Value": "aws-elasticbeanstalk-ec2-role" },
+            { "Namespace": "aws:elbv2:loadbalancer", "OptionName": "IdleTimeout", "Value": "60" },
+            { "Namespace": "aws:elbv2:loadbalancer", "OptionName": "AccessLogsS3Bucket", "Value": "elasticbeanstalk-accesslogs" },
+            { "Namespace": "aws:elasticbeanstalk:environment:process:default", "OptionName": "MatcherHTTPCode", "Value": "200" }
+          ]
+          EOF
 
           echo "✅ Dev OptionSettings prepared dynamically"
           cat dev-options.json
