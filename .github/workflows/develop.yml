@@ -46,33 +46,26 @@ jobs:
           role-to-assume: arn:aws:iam::045615335706:role/PLT_Test_Role
           aws-region: us-east-1
 
-      # 5️⃣ Create Configuration Template in Dev (resolves platform ARN dynamically)
+            # 5️⃣ Create Configuration Template in Dev (use Prod PlatformArn directly)
       - name: Create EB Config Template in Dev
         run: |
           TEMPLATE_NAME="prod-template-${{ github.run_number }}"
           echo "TEMPLATE_NAME=$TEMPLATE_NAME" >> $GITHUB_ENV
 
-          # Extract the platform part (e.g. "Node.js 22 running on 64bit Amazon Linux 2023/6.6.4")
           PLATFORM_ARN=$(jq -r '.Environments[0].PlatformArn' prod-env.json)
-          echo "Prod Platform ARN: $PLATFORM_ARN"
+          echo "Using Prod Platform ARN: $PLATFORM_ARN"
 
-          # Look up full ARN including version suffix
-          FULL_PLATFORM_ARN=$(aws elasticbeanstalk list-platform-versions \
-            --query "PlatformSummaryList[?PlatformArn=='$PLATFORM_ARN'].PlatformArn | [0]" \
-            --output text)
-
-          if [ "$FULL_PLATFORM_ARN" = "None" ] || [ -z "$FULL_PLATFORM_ARN" ]; then
-            echo "❌ Could not resolve platform ARN. Check prod-env.json and available platforms."
+          if [ "$PLATFORM_ARN" = "null" ] || [ -z "$PLATFORM_ARN" ]; then
+            echo "❌ No PlatformArn found in prod-env.json"
             exit 1
           fi
-
-          echo "Resolved PlatformArn: $FULL_PLATFORM_ARN"
 
           aws elasticbeanstalk create-configuration-template \
             --application-name PLT \
             --template-name "$TEMPLATE_NAME" \
-            --platform-arn "$FULL_PLATFORM_ARN" \
+            --platform-arn "$PLATFORM_ARN" \
             --option-settings file://<(jq -c '.ConfigurationSettings[0].OptionSettings' prod-config.json)
+
 
       # 6️⃣ Create Dev Environment from template
       - name: Create EB Environment in Dev
