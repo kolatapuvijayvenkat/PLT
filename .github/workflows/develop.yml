@@ -77,7 +77,7 @@ jobs:
                 "Value": "subnet-0b48e5db951f37a13,subnet-08fbd00b27c48c757"
               },
               {
-                "Namespace": "ws:autoscaling:launchconfiguration",
+                "Namespace": "aws:autoscaling:launchconfiguration",
                 "OptionName": "SecurityGroups",
                 "Value": "sg-017eb9b8564826a7e"
               },
