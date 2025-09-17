@@ -3,7 +3,7 @@ name: Deploy EB Env to Dev on Merge to Develop
 on:
   push:
     branches:
-      - develop
+      - develop   # Trigger only on merge/push to develop
 
 permissions:
   id-token: write
@@ -46,26 +46,24 @@ jobs:
           role-to-assume: arn:aws:iam::045615335706:role/PLT_Test_Role
           aws-region: us-east-1
 
-      # 5️⃣ Filter Prod OptionSettings to remove incompatible options and fix MatcherHTTPCode
+      # 5️⃣ Filter Prod OptionSettings to remove incompatible options
       - name: Filter Compatible OptionSettings
         run: |
-          jq '[.ConfigurationSettings[0].OptionSettings[]
-              | select(.Namespace != "aws:autoscaling:launchconfiguration"
+          jq '[.ConfigurationSettings[0].OptionSettings[] 
+              | select(.Namespace != "aws:autoscaling:launchconfiguration" 
                        and .Namespace != "aws:ec2:instances"
-                       and .Namespace != "aws:elasticbeanstalk:environment:proxy")
-              | if .Namespace=="aws:elasticbeanstalk:environment:process:default"
-                   and .OptionName=="MatcherHTTPCode"
-                   and (.Value==null or .Value=="")
-                then .Value="200" else . end
-          ]' prod-config.json > dev-options.json
+                       and .Namespace != "aws:elasticbeanstalk:application:environment"
+                       and .Namespace != "aws:elasticbeanstalk:environment:proxy"
+                       and .Namespace != "aws:elasticbeanstalk:environment:process")]' \
+              prod-config.json > dev-options.json
           echo "Filtered OptionSettings saved to dev-options.json"
           cat dev-options.json
 
-      # 6️⃣ Dynamically select latest ready Node.js platform in Dev
-      - name: Select Latest Node.js Platform
+      # 6️⃣ Select latest ready Node.js platform in Dev
+      - name: Select Node.js Platform
         run: |
           PLATFORM_ARN=$(aws elasticbeanstalk list-platform-versions \
-            --query "PlatformSummaryList[?contains(PlatformName,'Node.js') && PlatformStatus=='Ready'] | [-1].PlatformArn" \
+            --query "PlatformSummaryList[?PlatformName != null && contains(PlatformName,'Node.js') && PlatformStatus=='Ready'] | [-1].PlatformArn" \
             --output text)
 
           if [ -z "$PLATFORM_ARN" ] || [ "$PLATFORM_ARN" = "None" ]; then
@@ -76,7 +74,7 @@ jobs:
           echo "PLATFORM_ARN=$PLATFORM_ARN" >> $GITHUB_ENV
           echo "Using Platform ARN: $PLATFORM_ARN"
 
-      # 7️⃣ Create Dev EB Environment using the selected platform
+      # 7️⃣ Create Dev EB Environment
       - name: Create EB Environment in Dev
         run: |
           EB_ENV_NAME="dev-env-${{ github.run_number }}"
