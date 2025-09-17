@@ -3,7 +3,7 @@ name: Deploy EB Env to Dev on Merge to Develop
 on:
   push:
     branches:
-      - develop   # Trigger only on merge/push to develop
+      - develop
 
 permissions:
   id-token: write
@@ -19,14 +19,14 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      # 2️⃣ Configure AWS Prod Account (to fetch Prod config)
+      # 2️⃣ Configure AWS Prod Account
       - name: Configure AWS Prod Account
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::986906625933:role/OPS_TEST_ROLE
           aws-region: us-east-1
 
-      # 3️⃣ Export Prod EB environment configuration
+      # 3️⃣ Export Prod EB Config
       - name: Export Prod EB Config
         run: |
           aws elasticbeanstalk describe-configuration-settings \
@@ -41,20 +41,34 @@ jobs:
           role-to-assume: arn:aws:iam::045615335706:role/PLT_Test_Role
           aws-region: us-east-1
 
-      # 5️⃣ Create a configuration template in Dev based on Prod configuration
+      # 5️⃣ Choose a ready Node.js platform available in Dev
+      - name: Get Dev Node.js Platform
+        run: |
+          PLATFORM_NAME=$(aws elasticbeanstalk list-platform-versions \
+            --query "PlatformSummaryList[?contains(PlatformName,'Node.js') && PlatformStatus=='Ready'] | [0].PlatformName" \
+            --output text)
+          
+          if [ -z "$PLATFORM_NAME" ] || [ "$PLATFORM_NAME" = "None" ]; then
+            echo "❌ No ready Node.js platform found in Dev account"
+            exit 1
+          fi
+
+          echo "PLATFORM_NAME=$PLATFORM_NAME" >> $GITHUB_ENV
+          echo "Using Platform: $PLATFORM_NAME"
+
+      # 6️⃣ Create configuration template in Dev
       - name: Create EB Config Template in Dev
         run: |
           TEMPLATE_NAME="prod-template-${{ github.run_number }}"
           echo "TEMPLATE_NAME=$TEMPLATE_NAME" >> $GITHUB_ENV
 
-          # Create a new configuration template using the Prod OptionSettings
           aws elasticbeanstalk create-configuration-template \
             --application-name PLT \
             --template-name "$TEMPLATE_NAME" \
-            --solution-stack-name "64bit Amazon Linux 2 v5.8.0 running Node.js 18" \
+            --solution-stack-name "$PLATFORM_NAME" \
             --option-settings file://<(jq -c '.ConfigurationSettings[0].OptionSettings' prod-config.json)
 
-      # 6️⃣ Create a new Dev EB environment using the template
+      # 7️⃣ Create Dev EB Environment using template
       - name: Create EB Environment in Dev
         run: |
           EB_ENV_NAME="dev-env-${{ github.run_number }}"
@@ -65,7 +79,7 @@ jobs:
             --environment-name "$EB_ENV_NAME" \
             --template-name "$TEMPLATE_NAME"
 
-      # 7️⃣ Smoke Test Dev Environment
+      # 8️⃣ Smoke Test
       - name: Smoke Test Dev Environment
         run: |
           echo "Waiting for environment $EB_ENV_NAME to be ready..."
