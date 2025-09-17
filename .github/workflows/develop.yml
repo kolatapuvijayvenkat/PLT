@@ -68,10 +68,13 @@ jobs:
 
           echo "Resolved PlatformArn: $FULL_PLATFORM_ARN"
 
+          # Correct the ARN format by ensuring it matches the expected pattern
+          FULL_PLATFORM_ARN=$(echo "$FULL_PLATFORM_ARN" | sed 's|arn:aws:elasticbeanstalk:[^:]*::platform/||')
+
           aws elasticbeanstalk create-configuration-template \
             --application-name PLT \
             --template-name "$TEMPLATE_NAME" \
-            --platform-arn "$FULL_PLATFORM_ARN" \
+            --platform-arn "arn:aws:elasticbeanstalk:us-east-1::platform/$FULL_PLATFORM_ARN" \
             --option-settings file://<(jq -c '.ConfigurationSettings[0].OptionSettings' prod-config.json)
 
       # 6️⃣ Create Dev Environment from template
