@@ -86,3 +86,4 @@ jobs:
 
           echo "Testing endpoint: http://$APP_URL"
           curl -f http://$APP_URL || exit 1
+
