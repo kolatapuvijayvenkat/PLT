@@ -76,8 +76,7 @@ jobs:
                { "Namespace": "aws:elbv2:loadbalancer", "OptionName": "AccessLogsS3Bucket", "Value": "elasticbeanstalk-accesslogs" },
                { "Namespace": "aws:elasticbeanstalk:environment:process:default", "OptionName": "MatcherHTTPCode", "Value": "200" },
                { "Namespace": "aws:elasticbeanstalk:managedactions", "OptionName": "PreferredStartTime", "Value": "Sun:03:00" },
-               { "Namespace": "aws:elasticbeanstalk:managedactions", "OptionName": "ManagedActionsEnabled", "Value": "true" },
-               { "Namespace": "aws:elasticbeanstalk:managedactions", "OptionName": "InstanceRefreshEnabled", "Value": "true" }]' dev-options.json > tmp.json && mv tmp.json dev-options.json
+               { "Namespace": "aws:elasticbeanstalk:managedactions", "OptionName": "ManagedActionsEnabled", "Value": "true" }]' dev-options.json > tmp.json && mv tmp.json dev-options.json
 
           echo "✅ Final Dev OptionSettings:"
           cat dev-options.json
