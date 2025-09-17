@@ -46,25 +46,22 @@ jobs:
           role-to-assume: arn:aws:iam::045615335706:role/PLT_Test_Role
           aws-region: us-east-1
 
-            # 5️⃣ Create Configuration Template in Dev (use Prod PlatformArn directly)
-      - name: Create EB Config Template in Dev
-        run: |
-          TEMPLATE_NAME="prod-template-${{ github.run_number }}"
-          echo "TEMPLATE_NAME=$TEMPLATE_NAME" >> $GITHUB_ENV
+     # 5️⃣ Create Dev EB Environment directly (no template)
+- name: Create EB Environment in Dev
+  run: |
+    EB_ENV_NAME="dev-env-${{ github.run_number }}"
+    echo "EB_ENV_NAME=$EB_ENV_NAME" >> $GITHUB_ENV
 
-          PLATFORM_ARN=$(jq -r '.Environments[0].PlatformArn' prod-env.json)
-          echo "Using Prod Platform ARN: $PLATFORM_ARN"
+    # Option 1: specify a solution stack available in Dev
+    SOLUTION_STACK="64bit Amazon Linux 2023 v6.6.4 running Node.js 22"
 
-          if [ "$PLATFORM_ARN" = "null" ] || [ -z "$PLATFORM_ARN" ]; then
-            echo "❌ No PlatformArn found in prod-env.json"
-            exit 1
-          fi
+    # Create environment using Prod configuration options but Dev stack
+    aws elasticbeanstalk create-environment \
+      --application-name PLT \
+      --environment-name "$EB_ENV_NAME" \
+      --solution-stack-name "$SOLUTION_STACK" \
+      --option-settings file://<(jq -c '.ConfigurationSettings[0].OptionSettings' prod-config.json)
 
-          aws elasticbeanstalk create-configuration-template \
-            --application-name PLT \
-            --template-name "$TEMPLATE_NAME" \
-            --platform-arn "$PLATFORM_ARN" \
-            --option-settings file://<(jq -c '.ConfigurationSettings[0].OptionSettings' prod-config.json)
 
 
       # 6️⃣ Create Dev Environment from template
