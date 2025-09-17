@@ -41,20 +41,30 @@ jobs:
           role-to-assume: arn:aws:iam::045615335706:role/PLT_Test_Role
           aws-region: us-east-1
 
-      # 5️⃣ Create Dev EB Environment (use default platform, copy OptionSettings only)
+      # 5️⃣ Pick latest Node.js platform in Dev
+      - name: Pick Latest Node.js Platform in Dev
+        id: platform
+        run: |
+          PLATFORM_NAME=$(aws elasticbeanstalk list-platform-versions \
+            --query "PlatformSummaryList[?contains(PlatformName,'Node.js') && contains(PlatformStatus,'Ready')]|[0].PlatformArn" \
+            --output text)
+          echo "PLATFORM_NAME=$PLATFORM_NAME" >> $GITHUB_ENV
+          echo "Using Platform ARN: $PLATFORM_NAME"
+
+      # 6️⃣ Create Dev Environment
       - name: Create Dev EB Environment
         run: |
           EB_ENV_NAME="dev-env-${{ github.run_number }}"
           echo "EB_ENV_NAME=$EB_ENV_NAME" >> $GITHUB_ENV
 
-          echo "Creating Dev environment '$EB_ENV_NAME' using default platform, copying Prod OptionSettings"
-
+          echo "Creating Dev environment '$EB_ENV_NAME' with platform $PLATFORM_NAME"
           aws elasticbeanstalk create-environment \
             --application-name PLT \
             --environment-name "$EB_ENV_NAME" \
+            --platform-arn "$PLATFORM_NAME" \
             --option-settings file://<(jq -c '.ConfigurationSettings[0].OptionSettings' prod-config.json)
 
-      # 6️⃣ Wait & Smoke Test
+      # 7️⃣ Wait & Smoke Test
       - name: Smoke Test Dev Environment
         run: |
           echo "Waiting for environment $EB_ENV_NAME to be ready..."
