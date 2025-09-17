@@ -26,18 +26,13 @@ jobs:
           role-to-assume: arn:aws:iam::986906625933:role/OPS_TEST_ROLE
           aws-region: us-east-1
 
-      # 3️⃣ Export Prod EB configuration + environment details
+      # 3️⃣ Export Prod EB configuration
       - name: Export Prod EB Config
         run: |
           aws elasticbeanstalk describe-configuration-settings \
             --application-name PLT \
             --environment-name PLT-env \
             > prod-config.json
-
-          aws elasticbeanstalk describe-environments \
-            --application-name PLT \
-            --environment-names PLT-env \
-            > prod-env.json
 
       # 4️⃣ Configure AWS Dev Account
       - name: Configure AWS Dev Account
@@ -46,10 +41,10 @@ jobs:
           role-to-assume: arn:aws:iam::045615335706:role/PLT_Test_Role
           aws-region: us-east-1
 
-      # 5️⃣ Filter Prod OptionSettings + Inject Dev VPC settings
+      # 5️⃣ Prepare Dev OptionSettings (filter + inject Dev networking)
       - name: Prepare Dev OptionSettings
         run: |
-          # Filter out incompatible namespaces from prod config
+          # Filter incompatible namespaces from Prod config
           jq '[.ConfigurationSettings[0].OptionSettings[] 
               | select(.Namespace != "aws:autoscaling:launchconfiguration" 
                        and .Namespace != "aws:ec2:instances"
@@ -58,9 +53,7 @@ jobs:
                        and .Namespace != "aws:elasticbeanstalk:environment:process")]' \
               prod-config.json > dev-options.json
 
-          echo "Filtered OptionSettings saved to dev-options.json"
-
-          # ✅ Inject VPC/Subnets/SecurityGroups for Dev
+          # Inject hardcoded Dev VPC/Subnets/SecurityGroups
           jq '. + [
               {
                 "Namespace": "aws:ec2:vpc",
@@ -93,7 +86,7 @@ jobs:
           EB_ENV_NAME="dev-env-${{ github.run_number }}"
           echo "EB_ENV_NAME=$EB_ENV_NAME" >> $GITHUB_ENV
 
-          # Get latest Node.js 22 stack dynamically
+          # Get latest Node.js 22 solution stack
           LATEST_NODE_STACK=$(aws elasticbeanstalk list-available-solution-stacks \
             --query "SolutionStacks[?contains(@, 'Node.js 22')]|[0]" \
             --output text)
@@ -104,9 +97,7 @@ jobs:
           fi
 
           echo "✅ Using Solution Stack: $LATEST_NODE_STACK"
-          echo "LATEST_NODE_STACK=$LATEST_NODE_STACK" >> $GITHUB_ENV
 
-          # Create the Dev environment
           aws elasticbeanstalk create-environment \
             --application-name PLT \
             --environment-name "$EB_ENV_NAME" \
