@@ -3,7 +3,7 @@ name: Deploy EB Env to Dev on Merge to Develop
 on:
   push:
     branches:
-      - develop   # Trigger only on merge/push to develop
+      - develop
 
 permissions:
   id-token: write
@@ -61,14 +61,26 @@ jobs:
           echo "Filtered OptionSettings saved to dev-options.json"
           cat dev-options.json
 
-      # 6️⃣ Create Dev EB Environment using Node.js 12 BETA platform
+      # 6️⃣ Dynamically select latest ready Node.js platform in Dev
+      - name: Select Latest Node.js Platform
+        run: |
+          PLATFORM_ARN=$(aws elasticbeanstalk list-platform-versions \
+            --query "PlatformSummaryList[?contains(PlatformName,'Node.js') && PlatformStatus=='Ready'] | [-1].PlatformArn" \
+            --output text)
+
+          if [ -z "$PLATFORM_ARN" ] || [ "$PLATFORM_ARN" = "None" ]; then
+            echo "❌ No ready Node.js platform found in Dev account"
+            exit 1
+          fi
+
+          echo "PLATFORM_ARN=$PLATFORM_ARN" >> $GITHUB_ENV
+          echo "Using Platform ARN: $PLATFORM_ARN"
+
+      # 7️⃣ Create Dev EB Environment using the selected platform
       - name: Create EB Environment in Dev
         run: |
           EB_ENV_NAME="dev-env-${{ github.run_number }}"
           echo "EB_ENV_NAME=$EB_ENV_NAME" >> $GITHUB_ENV
-
-          # Use Node.js 12 BETA platform available in Dev
-          PLATFORM_ARN="arn:aws:elasticbeanstalk:us-east-1::platform/(BETA) Node.js 12 running on 64bit Amazon Linux 2/0.1.0"
 
           echo "Creating Dev environment '$EB_ENV_NAME' with platform ARN '$PLATFORM_ARN'"
 
@@ -78,7 +90,7 @@ jobs:
             --platform-arn "$PLATFORM_ARN" \
             --option-settings file://dev-options.json
 
-      # 7️⃣ Smoke Test Dev Environment
+      # 8️⃣ Smoke Test Dev Environment
       - name: Smoke Test Dev Environment
         run: |
           echo "Waiting for environment $EB_ENV_NAME to be ready..."
