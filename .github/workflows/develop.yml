@@ -48,24 +48,22 @@ jobs:
 
       # 5️⃣ Filter Prod OptionSettings to remove incompatible options
       - name: Filter Compatible OptionSettings
-        id: filter-options
         run: |
-          # Remove options that are not supported on Node.js 12
-          jq '[.ConfigurationSettings[0].OptionSettings[]
-              | select(.Namespace != "aws:elasticbeanstalk:autoscaling:launchconfiguration" 
-                       and .Namespace != "aws:elasticbeanstalk:application:environment")]' prod-config.json \
-            > dev-options.json
-
+          jq '[.ConfigurationSettings[0].OptionSettings[] 
+              | select(.Namespace != "aws:autoscaling:launchconfiguration" 
+                       and .Namespace != "aws:ec2:instances"
+                       and .Namespace != "aws:elasticbeanstalk:application:environment")]' \
+              prod-config.json > dev-options.json
           echo "Filtered OptionSettings saved to dev-options.json"
           cat dev-options.json
 
-      # 6️⃣ Create Dev EB Environment using available Node.js 12 platform
+      # 6️⃣ Create Dev EB Environment using Node.js 12 platform
       - name: Create EB Environment in Dev
         run: |
           EB_ENV_NAME="dev-env-${{ github.run_number }}"
           echo "EB_ENV_NAME=$EB_ENV_NAME" >> $GITHUB_ENV
 
-          # Use the only available Node.js platform in Dev account
+          # Use Node.js 12 BETA platform available in Dev
           PLATFORM_ARN="arn:aws:elasticbeanstalk:us-east-1::platform/(BETA) Node.js 12 running on 64bit Amazon Linux 2/0.1.0"
 
           echo "Creating Dev environment '$EB_ENV_NAME' with platform ARN '$PLATFORM_ARN'"
