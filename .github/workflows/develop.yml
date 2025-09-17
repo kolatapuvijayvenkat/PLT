@@ -55,7 +55,7 @@ jobs:
             echo "PLT app already exists in Dev"
           fi
 
-      # 6️⃣ Create new Configuration Template in Dev
+      # 6️⃣ Create new Configuration Template in Dev (using Prod option settings)
       - name: Create Configuration Template
         run: |
           TEMPLATE_NAME="prod-template-${{ github.run_number }}"
@@ -64,7 +64,7 @@ jobs:
           aws elasticbeanstalk create-configuration-template \
             --application-name PLT \
             --template-name "$TEMPLATE_NAME" \
-            --source-configuration file://<(jq -c '{ApplicationName:"PLT", TemplateName:"dummy", EnvironmentId:"", EnvironmentName:""} + {OptionSettings:.ConfigurationSettings[0].OptionSettings}' prod-config.json)
+            --option-settings file://<(jq -c '.ConfigurationSettings[0].OptionSettings' prod-config.json)
 
       # 7️⃣ Create new Dev EB Environment
       - name: Create EB Environment in Dev
