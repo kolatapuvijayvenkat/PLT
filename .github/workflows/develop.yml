@@ -46,14 +46,18 @@ jobs:
           role-to-assume: arn:aws:iam::045615335706:role/PLT_Test_Role
           aws-region: us-east-1
 
-      # 5️⃣ Filter Prod OptionSettings to remove incompatible options
+      # 5️⃣ Filter Prod OptionSettings to remove incompatible options and fix MatcherHTTPCode
       - name: Filter Compatible OptionSettings
         run: |
-          jq '[.ConfigurationSettings[0].OptionSettings[] 
-              | select(.Namespace != "aws:autoscaling:launchconfiguration" 
+          jq '[.ConfigurationSettings[0].OptionSettings[]
+              | select(.Namespace != "aws:autoscaling:launchconfiguration"
                        and .Namespace != "aws:ec2:instances"
-                       and .Namespace != "aws:elasticbeanstalk:environment:proxy")]' \
-              prod-config.json > dev-options.json
+                       and .Namespace != "aws:elasticbeanstalk:environment:proxy")
+              | if .Namespace=="aws:elasticbeanstalk:environment:process:default"
+                   and .OptionName=="MatcherHTTPCode"
+                   and (.Value==null or .Value=="")
+                then .Value="200" else . end
+          ]' prod-config.json > dev-options.json
           echo "Filtered OptionSettings saved to dev-options.json"
           cat dev-options.json
 
@@ -63,7 +67,7 @@ jobs:
           EB_ENV_NAME="dev-env-${{ github.run_number }}"
           echo "EB_ENV_NAME=$EB_ENV_NAME" >> $GITHUB_ENV
 
-          # Node.js 12 BETA platform ARN available in Dev
+          # Use Node.js 12 BETA platform available in Dev
           PLATFORM_ARN="arn:aws:elasticbeanstalk:us-east-1::platform/(BETA) Node.js 12 running on 64bit Amazon Linux 2/0.1.0"
 
           echo "Creating Dev environment '$EB_ENV_NAME' with platform ARN '$PLATFORM_ARN'"
