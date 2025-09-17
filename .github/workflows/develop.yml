@@ -3,7 +3,7 @@ name: Deploy EB Env to Dev on Merge to Develop
 on:
   push:
     branches:
-      - develop   # Trigger only on merge/push to develop
+      - develop   # Trigger only when merging/pushing to develop
 
 permissions:
   id-token: write
@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout code
+      # 1️⃣ Checkout repo
       - name: Checkout Code
         uses: actions/checkout@v3
 
@@ -34,33 +34,26 @@ jobs:
             --environment-name PLT-env \
             > prod-config.json
 
-      # 4️⃣ Configure AWS Dev Account
+      # 4️⃣ Extract Prod application version label
+      - name: Extract Prod Version Label
+        run: |
+          VERSION_LABEL=$(aws elasticbeanstalk describe-environments \
+            --application-name PLT \
+            --environment-names PLT-env \
+            --query 'Environments[0].VersionLabel' \
+            --output text)
+
+          echo "VERSION_LABEL=$VERSION_LABEL" >> $GITHUB_ENV
+          echo "Using version: $VERSION_LABEL"
+
+      # 5️⃣ Configure AWS Dev Account
       - name: Configure AWS Dev Account
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::045615335706:role/PLT_Test_Role
           aws-region: us-east-1
 
-      # 5️⃣ Create new application version in Dev
-      - name: Create EB Application Version
-        run: |
-          # Ensure VERSION_LABEL is treated as string
-          VERSION_LABEL="build-${{ github.run_number }}"
-          echo "VERSION_LABEL=$VERSION_LABEL"
-
-          # Zip the application
-          zip -r app.zip .
-
-          # Verify zip exists
-          ls -lh app.zip
-
-          # Create application version
-          aws elasticbeanstalk create-application-version \
-            --application-name PLT \
-            --version-label "$VERSION_LABEL" \
-            --source-bundle fileb://app.zip
-
-      # 6️⃣ Create new Dev EB Environment
+      # 6️⃣ Create new Dev EB Environment (reusing Prod version)
       - name: Create EB Environment in Dev
         run: |
           EB_ENV_NAME="dev-env-${{ github.run_number }}"
@@ -72,7 +65,7 @@ jobs:
             --version-label "$VERSION_LABEL" \
             --option-settings file://<(jq -c '.ConfigurationSettings[0].OptionSettings' prod-config.json)
 
-      # 7️⃣ Smoke Test the Environment
+      # 7️⃣ Smoke Test Dev Environment
       - name: Smoke Test Dev Environment
         run: |
           echo "Waiting for environment $EB_ENV_NAME to be ready..."
@@ -86,4 +79,3 @@ jobs:
 
           echo "Testing endpoint: http://$APP_URL"
           curl -f http://$APP_URL || exit 1
-
