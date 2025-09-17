@@ -46,7 +46,7 @@ jobs:
           role-to-assume: arn:aws:iam::045615335706:role/PLT_Test_Role
           aws-region: us-east-1
 
-      # 5️⃣ Pick latest Node.js platform in Dev safely
+      # 5️⃣ Pick a ready Node.js platform in Dev
       - name: Pick Latest Node.js Platform in Dev
         id: platform
         run: |
@@ -59,10 +59,14 @@ jobs:
             exit 1
           fi
 
-          echo "PLATFORM_NAME=$PLATFORM_NAME" >> $GITHUB_ENV
           echo "Using Platform ARN: $PLATFORM_NAME"
 
-      # 6️⃣ Create new Dev EB Environment
+          # Export safely to GitHub env
+          echo "PLATFORM_NAME<<EOF" >> $GITHUB_ENV
+          echo "$PLATFORM_NAME" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      # 6️⃣ Create Dev Environment using Prod OptionSettings
       - name: Create EB Environment in Dev
         run: |
           EB_ENV_NAME="dev-env-${{ github.run_number }}"
