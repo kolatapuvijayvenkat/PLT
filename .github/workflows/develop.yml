@@ -41,34 +41,21 @@ jobs:
           role-to-assume: arn:aws:iam::045615335706:role/PLT_Test_Role
           aws-region: us-east-1
 
-      # 5️⃣ Choose a ready Node.js platform available in Dev
-      - name: Get Dev Node.js Platform
-        run: |
-          PLATFORM_NAME=$(aws elasticbeanstalk list-platform-versions \
-            --query "PlatformSummaryList[?contains(PlatformName,'Node.js') && PlatformStatus=='Ready'] | [0].PlatformName" \
-            --output text)
-          
-          if [ -z "$PLATFORM_NAME" ] || [ "$PLATFORM_NAME" = "None" ]; then
-            echo "❌ No ready Node.js platform found in Dev account"
-            exit 1
-          fi
-
-          echo "PLATFORM_NAME=$PLATFORM_NAME" >> $GITHUB_ENV
-          echo "Using Platform: $PLATFORM_NAME"
-
-      # 6️⃣ Create configuration template in Dev
+      # 5️⃣ Create configuration template in Dev using known Node.js 22 platform
       - name: Create EB Config Template in Dev
         run: |
           TEMPLATE_NAME="prod-template-${{ github.run_number }}"
           echo "TEMPLATE_NAME=$TEMPLATE_NAME" >> $GITHUB_ENV
 
+          SOLUTION_STACK="Node.js 22 running on 64bit Amazon Linux 2023/6.6.4"
+
           aws elasticbeanstalk create-configuration-template \
             --application-name PLT \
             --template-name "$TEMPLATE_NAME" \
-            --solution-stack-name "$PLATFORM_NAME" \
+            --solution-stack-name "$SOLUTION_STACK" \
             --option-settings file://<(jq -c '.ConfigurationSettings[0].OptionSettings' prod-config.json)
 
-      # 7️⃣ Create Dev EB Environment using template
+      # 6️⃣ Create Dev Environment using template
       - name: Create EB Environment in Dev
         run: |
           EB_ENV_NAME="dev-env-${{ github.run_number }}"
@@ -79,7 +66,7 @@ jobs:
             --environment-name "$EB_ENV_NAME" \
             --template-name "$TEMPLATE_NAME"
 
-      # 8️⃣ Smoke Test
+      # 7️⃣ Smoke Test
       - name: Smoke Test Dev Environment
         run: |
           echo "Waiting for environment $EB_ENV_NAME to be ready..."
