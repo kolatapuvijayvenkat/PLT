@@ -41,32 +41,22 @@ jobs:
           role-to-assume: arn:aws:iam::045615335706:role/PLT_Test_Role
           aws-region: us-east-1
 
-      # 5️⃣ Ensure PLT application exists in Dev
-      - name: Ensure PLT Application Exists in Dev
-        run: |
-          if ! aws elasticbeanstalk describe-applications \
-            --query "Applications[?ApplicationName=='PLT'] | length(@)" \
-            --output text | grep -q '^1$'; then
-            echo "PLT app not found in Dev, creating..."
-            aws elasticbeanstalk create-application \
-              --application-name PLT \
-              --description "PLT app for Dev testing"
-          else
-            echo "PLT app already exists in Dev"
-          fi
-
-      # 6️⃣ Create new Configuration Template in Dev (using Prod option settings)
+      # 5️⃣ Extract SolutionStackName + Create Configuration Template in Dev
       - name: Create Configuration Template
         run: |
           TEMPLATE_NAME="prod-template-${{ github.run_number }}"
           echo "TEMPLATE_NAME=$TEMPLATE_NAME" >> $GITHUB_ENV
 
+          SOLUTION_STACK=$(jq -r '.ConfigurationSettings[0].SolutionStackName' prod-config.json)
+          echo "Using Solution Stack: $SOLUTION_STACK"
+
           aws elasticbeanstalk create-configuration-template \
             --application-name PLT \
             --template-name "$TEMPLATE_NAME" \
+            --solution-stack-name "$SOLUTION_STACK" \
             --option-settings file://<(jq -c '.ConfigurationSettings[0].OptionSettings' prod-config.json)
 
-      # 7️⃣ Create new Dev EB Environment
+      # 6️⃣ Create new Dev EB Environment using the Template
       - name: Create EB Environment in Dev
         run: |
           EB_ENV_NAME="dev-env-${{ github.run_number }}"
@@ -77,7 +67,7 @@ jobs:
             --environment-name "$EB_ENV_NAME" \
             --template-name "$TEMPLATE_NAME"
 
-      # 8️⃣ Smoke Test the Environment
+      # 7️⃣ Smoke Test the Environment
       - name: Smoke Test Dev Environment
         run: |
           echo "Waiting for environment $EB_ENV_NAME to be ready..."
