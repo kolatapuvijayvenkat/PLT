@@ -46,10 +46,11 @@ jobs:
           role-to-assume: arn:aws:iam::045615335706:role/PLT_Test_Role
           aws-region: us-east-1
 
-      # 5️⃣ Filter Prod OptionSettings to remove incompatible namespaces and empty values
+      # 5️⃣ Filter Prod OptionSettings for Dev (exclude SNS + other incompatible namespaces)
       - name: Prepare Dev OptionSettings
         run: |
           jq '[.ConfigurationSettings[0].OptionSettings[]
+              | select(.Namespace != "aws:sns")   # 🚫 exclude SNS (fix cross-account error)
               | select(.Namespace != "aws:autoscaling:launchconfiguration"
                        and .Namespace != "aws:ec2:instances"
                        and .Namespace != "aws:elasticbeanstalk:application:environment"
@@ -61,7 +62,7 @@ jobs:
           echo "Filtered OptionSettings saved to dev-options.json"
           cat dev-options.json
 
-          # ✅ Inject VPC/Subnets/SecurityGroups for Dev (hardcoded)
+          # ✅ Inject Dev-specific VPC/Subnets/SecurityGroups/IAM
           jq '. + [
               { "Namespace": "aws:ec2:vpc", "OptionName": "VPCId", "Value": "vpc-05a2f1b85df19807c" },
               { "Namespace": "aws:ec2:vpc", "OptionName": "Subnets", "Value": "subnet-0f1f0ebfb48672ae2,subnet-0090c94d4c6b20730"},
@@ -118,4 +119,3 @@ jobs:
 
           echo "Testing endpoint: http://$APP_URL"
           curl -f http://$APP_URL || exit 1
-
