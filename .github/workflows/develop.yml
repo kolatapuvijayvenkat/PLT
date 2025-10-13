@@ -44,16 +44,6 @@ jobs:
           cd backend
           zip -r ../app.zip ./*
 
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v3
-        with:
-          role-to-assume: arn:aws:iam::682033477295:role/OPS_TEST_ROLE_1
-          role-session-name: github-actions
-          aws-region: ${{ secrets.AWS_REGION }}
-
-      - name: Debug AWS Identity
-        run: aws sts get-caller-identity
-
       - name: Terraform Init
         working-directory: ./Terraform
         run: terraform init
