@@ -5,37 +5,49 @@ on:
     branches:
       - develop
 
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
   terraform-deploy:
     runs-on: ubuntu-latest
 
     steps:
+      # Step 1: Checkout repo
       - name: Checkout Code
         uses: actions/checkout@v3
 
+      # Step 2: Setup Terraform
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v2
         with:
-          terraform_version: 1.13.3  
+          terraform_version: 1.13.3  # Replace with your required version
 
+      # Step 3: Configure AWS credentials via OIDC
       - name: Configure AWS Credentials
+        id: aws
         uses: aws-actions/configure-aws-credentials@v3
         with:
           role-to-assume: arn:aws:iam::682033477295:role/OPS_TEST_ROLE_2
           role-session-name: github-actions
           aws-region: ${{ secrets.AWS_REGION }}
 
+      # Step 4: Debug AWS Identity
       - name: Debug AWS Identity
         run: aws sts get-caller-identity
 
+      # Step 5: Terraform Init
       - name: Terraform Init
         working-directory: ./Terraform
         run: terraform init
 
+      # Step 6: Terraform Plan
       - name: Terraform Plan
         working-directory: ./Terraform
         run: terraform plan -out=tfplan
 
+      # Step 7: Terraform Apply
       - name: Terraform Apply
         working-directory: ./Terraform
         run: terraform apply -auto-approve tfplan
