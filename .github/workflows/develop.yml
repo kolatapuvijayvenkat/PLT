@@ -51,4 +51,4 @@ jobs:
       # Step 7: Terraform Apply
       - name: Terraform Apply
         working-directory: ./Terraform
-        run: terraform apply -auto-approve tfplan
+        run: terraform destroy -auto-approve tfplan
