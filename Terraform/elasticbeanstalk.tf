@@ -13,7 +13,8 @@ resource "aws_elastic_beanstalk_application" "app" {
 # -----------------------------
 # 2️⃣ IAM ROLES
 # -----------------------------
-# Service Role
+
+# --- Service Role ---
 resource "aws_iam_role" "eb_service_role" {
   name = "aws-elasticbeanstalk-service-role"
 
@@ -37,7 +38,7 @@ resource "aws_iam_role_policy_attachment" "eb_service_role_enhanced" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSElasticBeanstalkEnhancedHealth"
 }
 
-# EC2 Instance Role
+# --- EC2 Instance Role ---
 resource "aws_iam_role" "eb_instance_role" {
   name = "aws-elasticbeanstalk-ec2-role"
 
@@ -79,22 +80,32 @@ resource "random_id" "bucket_id" {
 }
 
 resource "aws_s3_bucket" "eb_app_bucket" {
-  bucket = "eb-app-bucket-${random_id.bucket_id.hex}"
+  bucket        = "eb-app-bucket-${random_id.bucket_id.hex}"
+  force_destroy = true
 
   tags = {
     Name = "EB App Bucket"
   }
 }
 
-resource "aws_s3_bucket_acl" "eb_app_bucket_acl" {
-  bucket = aws_s3_bucket.eb_app_bucket.id
-  acl    = "private"
+# Block all public access (modern best practice)
+resource "aws_s3_bucket_public_access_block" "eb_app_bucket_block" {
+  bucket                  = aws_s3_bucket.eb_app_bucket.id
+  block_public_acls        = true
+  block_public_policy      = true
+  ignore_public_acls       = true
+  restrict_public_buckets  = true
 }
 
+# Upload app.zip (your application bundle)
 resource "aws_s3_object" "app_zip" {
   bucket = aws_s3_bucket.eb_app_bucket.id
   key    = "app.zip"
   source = "${path.module}/app.zip"
+
+  etag = filemd5("${path.module}/app.zip")
+
+  depends_on = [aws_s3_bucket_public_access_block.eb_app_bucket_block]
 }
 
 # -----------------------------
@@ -110,7 +121,7 @@ resource "aws_elastic_beanstalk_application_version" "app_version" {
 }
 
 # -----------------------------
-# 5️⃣ Environment
+# 5️⃣ Elastic Beanstalk Environment
 # -----------------------------
 resource "aws_elastic_beanstalk_environment" "env" {
   name                = "nodejs-env"
@@ -190,6 +201,7 @@ resource "aws_elastic_beanstalk_environment" "env" {
     aws_iam_role_policy_attachment.eb_instance_web,
     aws_vpc.main,
     aws_subnet.public_1,
-    aws_subnet.public_2
+    aws_subnet.public_2,
+    aws_s3_object.app_zip
   ]
 }
